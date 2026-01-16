@@ -1,9 +1,9 @@
 # blender_adapter/operators/node.py
 
 import bpy
-from blender_adapter.crud.node import BlenderNodeAdapter
 from blender_adapter.service.snapping import SnappingService
 from blender_adapter.utils.navigation import is_navigation_event
+from blender_adapter.core.live import get_live_session
 
 class DrawNode(bpy.types.Operator):
     bl_idname = "som.create_node_modal"
@@ -36,13 +36,20 @@ class DrawNode(bpy.types.Operator):
             return {'CANCELLED'}
 
         if event.type == 'LEFTMOUSE' and event.value == 'PRESS':
+
+            # 1. Resolve intent (UI / interaction)
             point = self._snapping.get_point(context, event)
 
-            node = BlenderNodeAdapter.create(
+            # 2. Get live session (creates if needed)
+            session = get_live_session(context)
+
+            # 3. Commit through manager (TRANSACTION)
+            bl_node = session.controller.nodes.create(
                 location=point,
                 size=self.empty_size,
-                collection=context.collection,
             )
-            node.select(context)
+
+            # 4. UI feedback
+            bl_node.select(context)
 
         return {'RUNNING_MODAL'}

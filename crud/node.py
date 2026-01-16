@@ -2,7 +2,7 @@
 
 import bpy
 from mathutils import Vector
-from blender_adapter.core.node import BlenderNode
+from blender_adapter.core.object.node import BlenderNode
 
 class BlenderNodeAdapter:
 

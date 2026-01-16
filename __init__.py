@@ -16,7 +16,7 @@ import bpy
 # Adapter / external bridge
 # -------------------------------------------------------------------
 
-from blender_adapter.adapter.blender_connector import BlenderConnector
+from blender_adapter.connector.blender_connector import BlenderConnector
 
 _adapter = BlenderConnector()
 _adapter.inject_path(r"D:\COMPUTATIONAL\Python_dev")
@@ -26,8 +26,12 @@ _adapter.inject_path(r"D:\COMPUTATIONAL\Python_dev\.venv311\Lib\site-packages")
 # Blender RNA / UI / Operators
 # -------------------------------------------------------------------
 
-from blender_adapter.core.node import NodeRNA
-from blender_adapter.core.frame import FrameRNA
+from blender_adapter.core.object.node import NodeRNA
+from blender_adapter.core.object.frame import FrameRNA
+
+from blender_adapter.operators.start_seesion import StartSession
+
+from blender_adapter.operators.export_json import ExportJson
 
 from blender_adapter.operators.draw_node import DrawNode
 from blender_adapter.operators.draw_frame import DrawFrame
@@ -39,14 +43,33 @@ from blender_adapter.operators.object_replicate import ReplicateObject
 from blender_adapter.operators.set_origin import SetOriginOperator
 
 from blender_adapter.ui.panel_main import (
-    SoM_DisplaySettings,
-    SoM_main_panel,
-    OBJECT_panel_node,
+    SOM_DisplaySettings,
+    SOM_PT_main_panel,
+    OBJECT_PT_node_data,
 )
+
+from blender_adapter.core.live import (
+    drop_live_session,
+)
+
+def _som_on_undo(scene):
+    drop_live_session(scene)
+    
+def _som_on_redo(scene):
+    drop_live_session(scene)
+
+def _som_on_load(_dummy):
+    scene = bpy.context.scene
+    if scene:
+        drop_live_session(scene)
 
 BLENDER_CLASSES = (
     NodeRNA,
     FrameRNA,
+
+    StartSession,
+
+    ExportJson,
 
     DrawNode, 
     DrawFrame,
@@ -57,9 +80,10 @@ BLENDER_CLASSES = (
 
     SetOriginOperator,
 
-    SoM_DisplaySettings,
-    SoM_main_panel,
-    OBJECT_panel_node,
+    SOM_DisplaySettings,
+    SOM_PT_main_panel,
+    OBJECT_PT_node_data,
+
 )
 
 # -------------------------------------------------------------------
@@ -87,24 +111,36 @@ def register():
     bpy.types.Object.node_rna = bpy.props.PointerProperty(type=NodeRNA)
     bpy.types.Object.frame_rna = bpy.props.PointerProperty(type=FrameRNA)
     bpy.types.Scene.som_display = bpy.props.PointerProperty(
-        type=SoM_DisplaySettings
+        type=SOM_DisplaySettings
     )
 
     # 3. Enable runtime services
     services.enable_all()
 
-    # 4. Dev hot-reload (non-fatal)
+    # 4. Runtime handlers (NEW)
+    bpy.app.handlers.undo_post.append(_som_on_undo)
+    bpy.app.handlers.redo_post.append(_som_on_redo)
+    bpy.app.handlers.load_post.append(_som_on_load)
+
+    # 5. Dev hot-reload
     try:
         _adapter.reload_development_modules()
     except Exception:
         pass
 
-
 def unregister():
-    # 1. Disable runtime services first (CRITICAL)
+    # 1. Disable runtime services first
     services.disable_all()
 
-    # 2. Remove RNA properties
+    # 2. Remove handlers (NEW)
+    if _som_on_undo in bpy.app.handlers.undo_post:
+        bpy.app.handlers.undo_post.remove(_som_on_undo)
+    if _som_on_redo in bpy.app.handlers.redo_post:
+        bpy.app.handlers.redo_post.remove(_som_on_redo)
+    if _som_on_load in bpy.app.handlers.load_post:
+        bpy.app.handlers.load_post.remove(_som_on_load)
+
+    # 3. Remove RNA properties
     if hasattr(bpy.types.Scene, "som_display"):
         del bpy.types.Scene.som_display
 
@@ -114,9 +150,9 @@ def unregister():
     if hasattr(bpy.types.Object, "frame_rna"):
         del bpy.types.Object.frame_rna
 
-    # 3. Unregister Blender classes
+    # 4. Unregister Blender classes
     for cls in reversed(BLENDER_CLASSES):
         bpy.utils.unregister_class(cls)
 
-    # 4. Disconnect external adapter
+    # 5. Disconnect external adapter
     _adapter.disconnect()

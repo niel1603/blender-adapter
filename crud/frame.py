@@ -1,7 +1,7 @@
 # blender_adapter/crud/frame.py
 
 import bpy
-from blender_adapter.core.frame import BlenderFrame
+from blender_adapter.core.object.frame import BlenderFrame
 from mathutils import Vector
 
 class BlenderFrameAdapter:

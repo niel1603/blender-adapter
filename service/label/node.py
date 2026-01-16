@@ -43,7 +43,7 @@ class NodeLabel(AddonService):
             rna = getattr(obj, "node_rna", None)
             if not rna:
                 return False
-            return getattr(rna, "node_type", None) == "Node"
+            return bool(rna.node_id)
 
         # ------------------------------------------------------------------
         # Draw labels (NODE OBJECTS ONLY)

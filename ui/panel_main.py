@@ -1,8 +1,9 @@
 # blender_adapter/ui/panel_main.py
 
 import bpy
+from blender_adapter.core.live import has_live_session
 
-class SoM_DisplaySettings(bpy.types.PropertyGroup):
+class SOM_DisplaySettings(bpy.types.PropertyGroup):
     # -------------------------
     # Node labels
     # -------------------------
@@ -29,9 +30,9 @@ class SoM_DisplaySettings(bpy.types.PropertyGroup):
         default=True
     )
 
-class SoM_main_panel(bpy.types.Panel):
+class SOM_PT_main_panel(bpy.types.Panel):
     bl_label = "Structural object Modeler"
-    bl_idname = "SoM_main_panel"
+    bl_idname = "SOM_PT_main_panel"
     bl_space_type = 'VIEW_3D'
     bl_region_type = 'UI'
     bl_category = "SoM"
@@ -42,8 +43,25 @@ class SoM_main_panel(bpy.types.Panel):
         display = scene.som_display
 
         # -------------------------------------------------
+        # Session
+        # -------------------------------------------------
+        if not has_live_session(scene):
+            layout.operator("som.start_live_session", icon='PLAY')
+            layout.separator()
+        else:
+            layout.label(text="Session active", icon='CHECKMARK')
+            layout.separator()
+
+        # -------------------------------------------------
+        # Export as JSON
+        # -------------------------------------------------
+        layout.label(text="Export as JSON file", icon="EXPORT")
+        layout.operator("structural.debug_export_json", icon="EXPORT")
+
+        # -------------------------------------------------
         # Geometry operators
         # -------------------------------------------------
+        layout.separator()
         layout.label(text="Geometry", icon='MESH_DATA')
         layout.operator("som.create_node_modal", icon='GREASEPENCIL')
         layout.operator("som.create_frame_modal", icon='GREASEPENCIL')
@@ -79,13 +97,12 @@ class SoM_main_panel(bpy.types.Panel):
         col.prop(display, "show_frame_id", text="ID")
         col.prop(display, "show_frame_label", text="Label")
 
-
-class OBJECT_panel_node(bpy.types.Panel):
+class OBJECT_PT_node_data(bpy.types.Panel):
     bl_label = "Node Data"
     bl_idname = "OBJECT_PT_node_data"
     bl_space_type = 'PROPERTIES'
     bl_region_type = 'WINDOW'
-    bl_context = "object"   # <-- Object tab
+    bl_context = "object"
 
     def draw(self, context):
         obj = context.object
@@ -94,6 +111,6 @@ class OBJECT_panel_node(bpy.types.Panel):
 
         rna = obj.node_rna
         layout = self.layout
-        layout.prop(rna, "node_id")
-        layout.prop(rna, "node_type")
-        layout.prop(rna, "label")
+
+        layout.prop(rna, "node_id", text="Node ID")
+        layout.prop(rna, "label", text="Label")
