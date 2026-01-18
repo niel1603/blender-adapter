@@ -26,8 +26,8 @@ _adapter.inject_path(r"D:\COMPUTATIONAL\Python_dev\.venv311\Lib\site-packages")
 # Blender RNA / UI / Operators
 # -------------------------------------------------------------------
 
-from blender_adapter.core.object.node import NodeRNA
-from blender_adapter.core.object.frame import FrameRNA
+from blender_adapter.core.blender_object.node import NodeRNA
+from blender_adapter.core.blender_object.frame import FrameRNA
 
 from blender_adapter.operators.start_seesion import StartSession
 
@@ -36,9 +36,9 @@ from blender_adapter.operators.export_json import ExportJson
 from blender_adapter.operators.draw_node import DrawNode
 from blender_adapter.operators.draw_frame import DrawFrame
 
-from blender_adapter.operators.object_move import MoveObject
-from blender_adapter.operators.object_delete import DeleteObject
-from blender_adapter.operators.object_replicate import ReplicateObject
+# from blender_adapter.operators.object_move import MoveObject
+# from blender_adapter.operators.object_delete import DeleteObject
+# from blender_adapter.operators.object_replicate import ReplicateObject
 
 from blender_adapter.operators.set_origin import SetOriginOperator
 
@@ -48,20 +48,21 @@ from blender_adapter.ui.panel_main import (
     OBJECT_PT_node_data,
 )
 
-from blender_adapter.core.live import (
-    drop_live_session,
-)
+from blender_adapter.core.app import bl_app
 
 def _som_on_undo(scene):
-    drop_live_session(scene)
+    app = bl_app()
+    app.drop_session(scene=scene)
     
 def _som_on_redo(scene):
-    drop_live_session(scene)
+    app = bl_app()
+    app.drop_session(scene=scene)
 
 def _som_on_load(_dummy):
     scene = bpy.context.scene
     if scene:
-        drop_live_session(scene)
+        app = bl_app()
+        app.drop_session(scene=scene)
 
 BLENDER_CLASSES = (
     NodeRNA,
@@ -74,9 +75,9 @@ BLENDER_CLASSES = (
     DrawNode, 
     DrawFrame,
 
-    MoveObject,
-    DeleteObject,
-    ReplicateObject,
+    # MoveObject,
+    # DeleteObject,
+    # ReplicateObject,
 
     SetOriginOperator,
 

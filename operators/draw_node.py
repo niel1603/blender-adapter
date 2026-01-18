@@ -3,7 +3,7 @@
 import bpy
 from blender_adapter.service.snapping import SnappingService
 from blender_adapter.utils.navigation import is_navigation_event
-from blender_adapter.core.live import get_live_session
+from blender_adapter.core.app import bl_app
 
 class DrawNode(bpy.types.Operator):
     bl_idname = "som.create_node_modal"
@@ -41,10 +41,10 @@ class DrawNode(bpy.types.Operator):
             point = self._snapping.get_point(context, event)
 
             # 2. Get live session (creates if needed)
-            session = get_live_session(context)
+            session = bl_app().session(scene=context.scene)
 
             # 3. Commit through manager (TRANSACTION)
-            bl_node = session.controller.nodes.create(
+            bl_node = session.ops.nodes.create(
                 location=point,
                 size=self.empty_size,
             )

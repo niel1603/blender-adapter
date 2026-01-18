@@ -1,7 +1,7 @@
 import bpy
-from blender_adapter.crud.frame import BlenderFrameAdapter
 from blender_adapter.service.snapping import SnappingService
 from blender_adapter.utils.navigation import is_navigation_event
+from blender_adapter.core.app import bl_app
 
 class DrawFrame(bpy.types.Operator):
     bl_idname = "som.create_frame_modal"
@@ -9,6 +9,7 @@ class DrawFrame(bpy.types.Operator):
     bl_options = {'REGISTER', 'UNDO'}
 
     snap_threshold: bpy.props.FloatProperty(default=10.0)  # type: ignore
+    empty_size: bpy.props.FloatProperty(default=0.1, min=0.001)  # type: ignore
 
     def invoke(self, context, event):
         if context.area.type != 'VIEW_3D':
@@ -16,11 +17,10 @@ class DrawFrame(bpy.types.Operator):
             return {'CANCELLED'}
 
         self._snapping = SnappingService(self.snap_threshold)
-        self._start_point = None
-        self._start_node_id = None
+        self._start_node_id: str | None = None
 
         context.area.header_text_set(
-            "Click start point | Shift+Click to snap"
+            "Click start node | Shift+Click to snap"
         )
         context.window_manager.modal_handler_add(self)
         return {'RUNNING_MODAL'}
@@ -31,33 +31,53 @@ class DrawFrame(bpy.types.Operator):
             return {'PASS_THROUGH'}
 
         if event.type == 'ESC':
-            self._start_point = None
             self._start_node_id = None
             context.area.header_text_set(None)
             return {'CANCELLED'}
 
         if event.type == 'LEFTMOUSE' and event.value == 'PRESS':
+
+            # 1. Resolve intent (UI)
             point = self._snapping.get_point(context, event)
 
-            if self._start_point is None:
-                self._start_point = point
-                self._start_node_id = "TEMP"  # placeholder for now
+            # 2. Get live session
+            session = bl_app().session(scene=context.scene)
+
+            # 3. Always create/reuse node through txn
+            # --- resolve / reuse node at click location ---
+            bl_node = session.ops.nodes.get_or_create(
+                location=point,
+                size=self.empty_size,
+            )
+
+            node_id = bl_node.id
+
+            # --- no start or end node yet → set start or end ---
+            if self._start_node_id is None:
+                self._start_node_id = node_id
+                bl_node.select(context)
+
                 context.area.header_text_set(
-                    "Start point set — click end point"
+                    "Start node set — click end node"
                 )
                 return {'RUNNING_MODAL'}
 
-            frame = BlenderFrameAdapter.create(
-                start=self._start_point,
-                end=point,
-                start_node_id=self._start_node_id,
-                end_node_id="TEMP",
-                collection=context.collection,
-            )
-            frame.select(context)
+            # --- start or end node already set → attempt to create frame ---
+            if node_id == self._start_node_id:
+                self.report({'WARNING'}, "Cannot create frame to same node")
+                return {'RUNNING_MODAL'}
 
-            self._start_point = point
-            self._start_node_id = "TEMP"
+            # 4. Commit frame via transaction
+            bl_frame = session.ops.frames.create(
+                n1_id=self._start_node_id,
+                n2_id=node_id,
+            )
+
+            # 5. UI feedback
+            bl_frame.select(context)
+
+            # 6. Continue chaining
+            self._start_node_id = node_id
             context.area.header_text_set(
                 "Frame created — click to continue"
             )

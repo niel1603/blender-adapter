@@ -36,9 +36,9 @@ class MoveObject(bpy.types.Operator):
         direction = (self.dx, self.dy, self.dz)
 
         for obj in context.selected_objects:
-            node_id = session.model.objects.get_node_id_by_object(obj)
+            node_id = session.state.identity.get_node_id_by_object(obj)
             if node_id:
-                session.controller.nodes.move(
+                session.ops.nodes.move(
                     node_id=node_id,
                     direction=direction,
                 )

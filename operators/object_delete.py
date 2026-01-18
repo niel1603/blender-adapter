@@ -10,7 +10,7 @@ class DeleteObject(bpy.types.Operator):
     def poll(cls, context):
         session = get_live_session(context)
         for obj in context.selected_objects:
-            if session.model.objects.get_node_id_by_object(obj):
+            if session.state.identity.get_node_id_by_object(obj):
                 return True
         return False
 
@@ -24,13 +24,13 @@ class DeleteObject(bpy.types.Operator):
         # 3. Resolve node IDs (deduplicated)
         node_ids: set[str] = set()
         for obj in objs:
-            node_id = session.model.objects.get_node_id_by_object(obj)
+            node_id = session.state.identity.get_node_id_by_object(obj)
             if node_id:
                 node_ids.add(node_id)
 
         # 4. TRANSACTION
         for node_id in node_ids:
-            session.controller.nodes.delete(node_id=node_id)
+            session.ops.nodes.delete(node_id=node_id)
 
         return {'FINISHED'}
 

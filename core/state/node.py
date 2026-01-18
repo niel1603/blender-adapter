@@ -1,18 +1,9 @@
 import bpy
-from blender_adapter.core.object.node import BlenderNode
+from blender_adapter.core.blender_object.node import BlNodeObject
 
-class BlenderObjectCollection:
-
-    """
-    Scene-scoped identity index.
-
-    Maps domain IDs <-> Blender objects.
-    Owns no Blender data and performs no mutations.
-    Rebuildable after undo / file reload.
-    """
-
+class BlNodeIndex():
     def __init__(self):
-        self._nodes: dict[str, str] = {}   # node_id -> object name
+        self._nodes: dict[str, str] = {}  # node_id -> object name
 
     # ---------- rebuild (undo / reload safe) ----------
 
@@ -29,7 +20,7 @@ class BlenderObjectCollection:
 
     # ---------- access ----------
 
-    def get_node(self, node_id: str) -> BlenderNode | None:
+    def get_node(self, node_id: str) -> BlNodeObject | None:
         name = self._nodes.get(node_id)
         if not name:
             return None
@@ -39,11 +30,11 @@ class BlenderObjectCollection:
             return None
 
         try:
-            return BlenderNode(obj)
+            return BlNodeObject(obj)
         except TypeError:
             return None
 
-    def require_node(self, node_id: str) -> BlenderNode:
+    def require_node(self, node_id: str) -> BlNodeObject:
         node = self.get_node(node_id)
         if not node:
             raise KeyError(f"BlenderNode not found for id '{node_id}'")
@@ -52,8 +43,8 @@ class BlenderObjectCollection:
     def has_node(self, node_id: str) -> bool:
         return node_id in self._nodes
 
-    def iter_nodes(self) -> list[BlenderNode]:
-        result: list[BlenderNode] = []
+    def iter_nodes(self) -> list[BlNodeObject]:
+        result: list[BlNodeObject] = []
 
         for node_id in list(self._nodes.keys()):
             node = self.get_node(node_id)
@@ -81,7 +72,6 @@ class BlenderObjectCollection:
         if not node_id:
             return None
 
-        # validate against index (important!)
         if node_id not in self._nodes:
             return None
 
@@ -89,8 +79,9 @@ class BlenderObjectCollection:
 
     # ---------- registration (fast path) ----------
 
-    def register_node(self, node_id: str, node: BlenderNode):
+    def register_node(self, node_id: str, node: BlNodeObject):
         self._nodes[node_id] = node.obj.name
 
     def unregister_node(self, node_id: str):
         self._nodes.pop(node_id, None)
+

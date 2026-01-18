@@ -4,7 +4,7 @@ from bpy.types import Operator
 from bpy.props import StringProperty
 from bpy_extras.io_utils import ExportHelper
 
-from blender_adapter.core.live import get_live_session
+from blender_adapter.core.app import bl_app
 
 class ExportJson(Operator, ExportHelper):
     """Export current StructuralModel to JSON"""
@@ -20,10 +20,11 @@ class ExportJson(Operator, ExportHelper):
     ) # type: ignore
 
     def execute(self, context):
-        session = get_live_session(context)
+        
+        session = bl_app().session(scene=context.scene)
 
         try:
-            session.model.structural.save_json(self.filepath)
+            session.state.model.save_json(self.filepath)
         except Exception as e:
             self.report({"ERROR"}, str(e))
             return {"CANCELLED"}

@@ -1,8 +1,8 @@
 import mathutils
 from bpy_extras import view3d_utils
 
-from blender_adapter.crud.node import BlenderNodeAdapter
-from blender_adapter.crud.frame import BlenderFrameAdapter
+from blender_adapter.core.blender_object.node import BlNodeAdapter
+from blender_adapter.core.blender_object.frame import BlFrameAdapter
 
 from blender_adapter.utils.is_object import is_plain_empty, is_plain_mesh
 
@@ -57,7 +57,7 @@ def snap_node_points(obj):
     """
     Snap to node origins
     """
-    node = BlenderNodeAdapter.get_by_object(obj)
+    node = BlNodeAdapter.get_by_object(obj)
     if not node:
         return
 
@@ -67,7 +67,7 @@ def snap_frame_endpoints(obj):
     """
     Snap to frame start & end points
     """
-    frame = BlenderFrameAdapter.get_by_object(obj)
+    frame = BlFrameAdapter.get_by_object(obj)
     if not frame:
         return
 
@@ -82,7 +82,7 @@ def snap_frame_midpoint(obj):
     """
     Snap to frame midpoint
     """
-    frame = BlenderFrameAdapter.get_by_object(obj)
+    frame = BlFrameAdapter.get_by_object(obj)
     if not frame:
         return
 

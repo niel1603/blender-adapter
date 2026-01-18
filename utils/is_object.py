@@ -1,5 +1,5 @@
-from blender_adapter.crud.node import BlenderNodeAdapter
-from blender_adapter.crud.frame import BlenderFrameAdapter
+from blender_adapter.core.blender_object.node import BlNodeAdapter
+from blender_adapter.core.blender_object.frame import BlFrameAdapter
 
 def is_plain_empty(obj) -> bool:
     """
@@ -9,7 +9,7 @@ def is_plain_empty(obj) -> bool:
         return False
 
     # exclude node
-    return BlenderNodeAdapter.get_by_object(obj) is None
+    return BlNodeAdapter.get_by_object(obj) is None
 
 def is_plain_mesh(obj) -> bool:
     """
@@ -19,4 +19,4 @@ def is_plain_mesh(obj) -> bool:
         return False
 
     # exclude frame
-    return BlenderFrameAdapter.get_by_object(obj) is None
+    return BlFrameAdapter.get_by_object(obj) is None

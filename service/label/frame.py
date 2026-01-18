@@ -46,7 +46,7 @@ class FrameLabel(AddonService):
             rna = getattr(obj, "frame_rna", None)
             if not rna:
                 return False
-            return getattr(rna, "frame_type", None) == "Frame"
+            return bool(rna.frame_id)
 
         # ------------------------------------------------------------------
         # Draw labels (FRAME OBJECTS ONLY)

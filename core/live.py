@@ -1,61 +1,37 @@
 import bpy
-from blender_adapter.core.model import BlenderModel
-from blender_adapter.core.controller import BlenderModelController
-from blender_adapter.core.adapter.node import BlenderNodeAdapter
+from blender_adapter.core.state._state import BlRuntimeState
+from blender_adapter.core.ops._ops import BlModelOps
 
-
-class BlenderLiveSession:
+class BlLiveSession:
     """
     Scene-scoped runtime container.
-    Owns BlenderModel and controller.
+    Owns runtime state and operations API.
     """
 
     def __init__(self, scene: bpy.types.Scene):
         self.scene = scene
 
         # --- sync model (Blender <-> Structural) ---
-        self.model = BlenderModel(scene)
+        self.state = BlRuntimeState(scene)
 
-        # --- controller ---
-        self.controller = BlenderModelController(
-            structural_model=self.model.structural,
-            object_collection=self.model.objects,
-            node_adapter=BlenderNodeAdapter,
-        )
+        # --- operations API ---
+        self.ops = BlModelOps(state=self.state)
+
+        self._alive = True
 
     # -------------------------------------------------
     # lifecycle hooks
     # -------------------------------------------------
 
     def rebuild_from_scene(self):
-        """
-        Re-sync after undo / redo / file load.
-        """
-        self.model.rebuild()
+        """Re-sync after undo / redo / file load."""
+        if not self._alive:
+            return
+        self.state.rebuild()
 
-# -------------------------------------------------
-# Scene-scoped access helpers
-# -------------------------------------------------
+    def dispose(self):
+        """Explicit teardown."""
+        if not self._alive:
+            return
 
-# scene_ptr (int) -> BlenderLiveSession
-_sessions: dict[int, BlenderLiveSession] = {}
-
-def get_live_session(context) -> BlenderLiveSession:
-    scene = context.scene
-    key = scene.as_pointer()
-
-    session = _sessions.get(key)
-    if session is None:
-        session = BlenderLiveSession(scene)
-        _sessions[key] = session
-
-    return session
-
-def has_live_session(scene) -> bool:
-    return scene.as_pointer() in _sessions
-
-def get_live_session_by_scene(scene) -> BlenderLiveSession | None:
-    return _sessions.get(scene.as_pointer())
-
-def drop_live_session(scene):
-    _sessions.pop(scene.as_pointer(), None)
+        self._alive = False

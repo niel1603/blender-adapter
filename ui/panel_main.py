@@ -1,7 +1,7 @@
 # blender_adapter/ui/panel_main.py
 
 import bpy
-from blender_adapter.core.live import has_live_session
+from blender_adapter.core.app import bl_app
 
 class SOM_DisplaySettings(bpy.types.PropertyGroup):
     # -------------------------
@@ -45,7 +45,8 @@ class SOM_PT_main_panel(bpy.types.Panel):
         # -------------------------------------------------
         # Session
         # -------------------------------------------------
-        if not has_live_session(scene):
+        app = bl_app()
+        if not app.has_session(scene):
             layout.operator("som.start_live_session", icon='PLAY')
             layout.separator()
         else:

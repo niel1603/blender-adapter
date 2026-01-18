@@ -39,12 +39,12 @@ class ReplicateObject(bpy.types.Operator):
         delta = Vector((self.dx, self.dy, self.dz))
 
         src_node_ids = {
-            session.model.objects.get_node_id_by_object(obj)
+            session.state.identity.get_node_id_by_object(obj)
             for obj in context.selected_objects
-            if session.model.objects.get_node_id_by_object(obj)
+            if session.state.identity.get_node_id_by_object(obj)
         }
 
-        session.controller.nodes.replicate_by_vector(
+        session.ops.nodes.replicate_by_vector(
             src_node_ids=src_node_ids,
             delta=delta,
             count=self.count,
