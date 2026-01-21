@@ -1,17 +1,17 @@
 import bpy
 
-from structural_om.domain.model import StructuralModel
-from blender_adapter.core.state.node import BlNodeIndex
-from blender_adapter.core.state.frame import BlFrameIndex
+from structural_om.core.model import StructuralModel
+from blender_adapter.core.model import BlenderModel
 
-class BlRuntimeState:
+class BlRuntime:
+    """
+    Runtime bridge between BlenderModel and StructuralModel.
+    """
+
     def __init__(self, scene: bpy.types.Scene):
         self.scene = scene
-        self.model = StructuralModel()
-
-        self.nodes = BlNodeIndex()
-        self.frames = BlFrameIndex()
-
+        self.structural = StructuralModel()
+        self.blender = BlenderModel(scene)
         self.rebuild()
 
     # ----------------------------
@@ -25,25 +25,25 @@ class BlRuntimeState:
         Blender state → identity indices → domain model
         Undo / redo / load safe.
         """
+
         # ------------------------------------
         # PHASE 1: Discover Blender state
         # ------------------------------------
 
-        self.nodes.rebuild(self.scene)
-        self.frames.rebuild(self.scene)
+        self.blender.rebuild()
 
         # ------------------------------------
         # PHASE 2: Reset domain model
         # ------------------------------------
 
-        self.model.clear()
+        self.structural.clear()
 
         # ------------------------------------
-        # PHASE 3: Materialize nodes (authoritative)
+        # PHASE 3: Materialize nodes
         # ------------------------------------
 
-        for bl_node in self.nodes.iter_nodes():
-            self.model.nodes.create(
+        for bl_node in self.blender.node:
+            self.structural.node.create(
                 xyz=tuple(bl_node.location),
                 node_id=bl_node.id,
             )
@@ -52,9 +52,9 @@ class BlRuntimeState:
         # PHASE 4: Materialize frames
         # ------------------------------------
 
-        for bl_frame in self.frames.iter_frames():
-            self.model.frames.create(
-                nodes=self.model.nodes,
+        for bl_frame in self.blender.frame:
+            self.structural.frame.create(
+                nodes=self.structural.node,
                 frame_id=bl_frame.id,
                 n1_id=bl_frame.start_node_id,
                 n2_id=bl_frame.end_node_id,
@@ -64,9 +64,9 @@ class BlRuntimeState:
         # PHASE 5: Seal rebuild (ID pools)
         # ------------------------------------
 
-        self.model.nodes.ids.rebuild_from_existing(
-            self.model.nodes.all().keys()
+        self.structural.node.ids.rebuild_from_existing(
+            self.structural.node.nodes.keys()
         )
-        self.model.frames.ids.rebuild_from_existing(
-            self.model.frames.all().keys()
+        self.structural.frame.ids.rebuild_from_existing(
+            self.structural.frame.frames.keys()
         )

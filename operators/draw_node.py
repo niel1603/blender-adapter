@@ -10,15 +10,12 @@ class DrawNode(bpy.types.Operator):
     bl_label = "Draw Node"
     bl_options = {'REGISTER', 'UNDO'}
 
-    snap_threshold: bpy.props.FloatProperty(default=10.0)  # type: ignore
-    empty_size: bpy.props.FloatProperty(default=0.1, min=0.001)  # type: ignore
-
     def invoke(self, context, event):
         if context.area.type != 'VIEW_3D':
             self.report({'WARNING'}, "3D View required")
             return {'CANCELLED'}
 
-        self._snapping = SnappingService(self.snap_threshold)
+        self._snapping = SnappingService()
 
         context.area.header_text_set(
             "Click to place Node | Shift+Click to snap"
@@ -44,10 +41,7 @@ class DrawNode(bpy.types.Operator):
             session = bl_app().session(scene=context.scene)
 
             # 3. Commit through manager (TRANSACTION)
-            bl_node = session.ops.nodes.create(
-                location=point,
-                size=self.empty_size,
-            )
+            bl_node = session.ops.node.create(location=point)
 
             # 4. UI feedback
             bl_node.select(context)

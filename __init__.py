@@ -26,8 +26,7 @@ _adapter.inject_path(r"D:\COMPUTATIONAL\Python_dev\.venv311\Lib\site-packages")
 # Blender RNA / UI / Operators
 # -------------------------------------------------------------------
 
-from blender_adapter.core.blender_object.node import NodeRNA
-from blender_adapter.core.blender_object.frame import FrameRNA
+from blender_adapter.core.object import BlNodeProps, BlFrameProps
 
 from blender_adapter.operators.start_seesion import StartSession
 
@@ -36,9 +35,9 @@ from blender_adapter.operators.export_json import ExportJson
 from blender_adapter.operators.draw_node import DrawNode
 from blender_adapter.operators.draw_frame import DrawFrame
 
-# from blender_adapter.operators.object_move import MoveObject
-# from blender_adapter.operators.object_delete import DeleteObject
-# from blender_adapter.operators.object_replicate import ReplicateObject
+from blender_adapter.operators.object_move import MoveObject
+from blender_adapter.operators.object_delete import DeleteObject
+from blender_adapter.operators.object_replicate import ReplicateObject
 
 from blender_adapter.operators.set_origin import SetOriginOperator
 
@@ -65,8 +64,8 @@ def _som_on_load(_dummy):
         app.drop_session(scene=scene)
 
 BLENDER_CLASSES = (
-    NodeRNA,
-    FrameRNA,
+    BlNodeProps,
+    BlFrameProps,
 
     StartSession,
 
@@ -75,9 +74,9 @@ BLENDER_CLASSES = (
     DrawNode, 
     DrawFrame,
 
-    # MoveObject,
-    # DeleteObject,
-    # ReplicateObject,
+    MoveObject,
+    DeleteObject,
+    ReplicateObject,
 
     SetOriginOperator,
 
@@ -109,8 +108,8 @@ def register():
         bpy.utils.register_class(cls)
 
     # 2. Attach RNA properties
-    bpy.types.Object.node_rna = bpy.props.PointerProperty(type=NodeRNA)
-    bpy.types.Object.frame_rna = bpy.props.PointerProperty(type=FrameRNA)
+    bpy.types.Object.node_rna = bpy.props.PointerProperty(type=BlNodeProps)
+    bpy.types.Object.frame_rna = bpy.props.PointerProperty(type=BlFrameProps)
     bpy.types.Scene.som_display = bpy.props.PointerProperty(
         type=SOM_DisplaySettings
     )

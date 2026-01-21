@@ -8,15 +8,12 @@ class DrawFrame(bpy.types.Operator):
     bl_label = "Draw Frame"
     bl_options = {'REGISTER', 'UNDO'}
 
-    snap_threshold: bpy.props.FloatProperty(default=10.0)  # type: ignore
-    empty_size: bpy.props.FloatProperty(default=0.1, min=0.001)  # type: ignore
-
     def invoke(self, context, event):
         if context.area.type != 'VIEW_3D':
             self.report({'WARNING'}, "3D View required")
             return {'CANCELLED'}
 
-        self._snapping = SnappingService(self.snap_threshold)
+        self._snapping = SnappingService()
         self._start_node_id: str | None = None
 
         context.area.header_text_set(
@@ -45,10 +42,7 @@ class DrawFrame(bpy.types.Operator):
 
             # 3. Always create/reuse node through txn
             # --- resolve / reuse node at click location ---
-            bl_node = session.ops.nodes.get_or_create(
-                location=point,
-                size=self.empty_size,
-            )
+            bl_node = session.ops.node.create(location=point)
 
             node_id = bl_node.id
 
@@ -68,7 +62,7 @@ class DrawFrame(bpy.types.Operator):
                 return {'RUNNING_MODAL'}
 
             # 4. Commit frame via transaction
-            bl_frame = session.ops.frames.create(
+            bl_frame = session.ops.frame.create(
                 n1_id=self._start_node_id,
                 n2_id=node_id,
             )

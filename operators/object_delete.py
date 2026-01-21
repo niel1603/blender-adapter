@@ -1,5 +1,5 @@
 import bpy
-from blender_adapter.core.live import get_live_session
+from blender_adapter.core.app import bl_app
 
 class DeleteObject(bpy.types.Operator):
     bl_idname = "som.delete_object"
@@ -8,10 +8,14 @@ class DeleteObject(bpy.types.Operator):
 
     @classmethod
     def poll(cls, context):
-        session = get_live_session(context)
+        session = bl_app().session(scene=context.scene)
+
         for obj in context.selected_objects:
-            if session.state.identity.get_node_id_by_object(obj):
+            if session.runtime.blender.node.get_id(obj):
                 return True
+            if session.runtime.blender.frame.get_id(obj):
+                return True
+
         return False
 
     def execute(self, context):
@@ -19,48 +23,29 @@ class DeleteObject(bpy.types.Operator):
         objs = list(context.selected_objects)
 
         # 2. Get live session
-        session = get_live_session(context)
+        session = bl_app().session(scene=context.scene)
 
-        # 3. Resolve node IDs (deduplicated)
+        # 3. Resolve IDs
         node_ids: set[str] = set()
+        frame_ids: set[str] = set()
+
         for obj in objs:
-            node_id = session.state.identity.get_node_id_by_object(obj)
+            frame_id = session.runtime.blender.frame.get_id(obj)
+            if frame_id:
+                frame_ids.add(frame_id)
+                continue
+
+            node_id = session.runtime.blender.node.get_id(obj)
             if node_id:
                 node_ids.add(node_id)
 
         # 4. TRANSACTION
+        # Delete frames first (they may own nodes)
+        for frame_id in frame_ids:
+            session.ops.frame.delete(frame_id=frame_id)
+
         for node_id in node_ids:
-            session.ops.nodes.delete(node_id=node_id)
+            session.ops.node.delete(node_id=node_id)
 
         return {'FINISHED'}
 
-
-# class DeleteObject(bpy.types.Operator):
-#     bl_idname = "som.delete_object"
-#     bl_label = "Delete Object"
-#     bl_options = {'REGISTER', 'UNDO'}
-
-#     @classmethod
-#     def poll(cls, context):
-#         return any(
-#             BlenderNodeAdapter.get_by_object(obj)
-#             or BlenderFrameAdapter.get_by_object(obj)
-#             for obj in context.selected_objects
-#         )
-
-#     def execute(self, context):
-#         # SNAPSHOT selection (important!)
-#         objs = list(context.selected_objects)
-
-#         for obj in objs:
-
-#             node = BlenderNodeAdapter.get_by_object(obj)
-#             if node:
-#                 BlenderNodeAdapter.delete(node)
-#                 continue
-
-#             frame = BlenderFrameAdapter.get_by_object(obj)
-#             if frame:
-#                 BlenderFrameAdapter.delete(frame)
-
-#         return {'FINISHED'}

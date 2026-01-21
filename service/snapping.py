@@ -1,63 +1,85 @@
 import mathutils
 from bpy_extras import view3d_utils
 
-from blender_adapter.core.blender_object.node import BlNodeAdapter
-from blender_adapter.core.blender_object.frame import BlFrameAdapter
-
-from blender_adapter.utils.is_object import is_plain_empty, is_plain_mesh
+from blender_adapter.core.object import BlNodeWrap
+from blender_adapter.core.object import BlFrameWrap
 
 # ---------- SNAP PROVIDERS ----------
-def snap_plain_empty_origin(obj):
-    """
-    Snap to EMPTY object origin (non-node)
-    """
-    if not is_plain_empty(obj):
-        return
 
-    yield obj.matrix_world.translation
+# def is_plain_empty(obj) -> bool:
+#     """
+#     EMPTY object that is NOT a Node
+#     """
+#     if obj.type != 'EMPTY':
+#         return False
 
-def snap_plain_mesh_endpoints(obj):
-    """
-    Snap to mesh extreme vertices (non-frame)
-    """
-    if not is_plain_mesh(obj):
-        return
+#     # exclude node
+#     return BlNodeAdapter.get_by_object(obj) is None
 
-    mesh = obj.data
-    if not mesh.vertices:
-        return
+# def is_plain_mesh(obj) -> bool:
+#     """
+#     MESH object that is NOT a Frame
+#     """
+#     if obj.type != 'MESH' or obj.data is None:
+#         return False
 
-    # world-space vertices
-    verts = [obj.matrix_world @ v.co for v in mesh.vertices]
+#     # exclude frame
+#     return BlFrameAdapter.get_by_object(obj) is None
 
-    # choose extremes (bounding box corners approximation)
-    min_v = min(verts, key=lambda v: (v.x, v.y, v.z))
-    max_v = max(verts, key=lambda v: (v.x, v.y, v.z))
+# def snap_plain_empty_origin(obj):
+#     """
+#     Snap to EMPTY object origin (non-node)
+#     """
+#     if not is_plain_empty(obj):
+#         return
 
-    yield min_v
-    yield max_v
+#     yield obj.matrix_world.translation
 
-def snap_plain_mesh_midpoint(obj):
-    """
-    Snap to mesh bounding-box center (non-frame)
-    """
-    if not is_plain_mesh(obj):
-        return
+# def snap_plain_mesh_endpoints(obj):
+#     """
+#     Snap to mesh extreme vertices (non-frame)
+#     """
+#     if not is_plain_mesh(obj):
+#         return
 
-    mesh = obj.data
-    if not mesh.vertices:
-        return
+#     mesh = obj.data
+#     if not mesh.vertices:
+#         return
 
-    verts = [obj.matrix_world @ v.co for v in mesh.vertices]
+#     # world-space vertices
+#     verts = [obj.matrix_world @ v.co for v in mesh.vertices]
 
-    center = sum(verts, mathutils.Vector()) / len(verts)
-    yield center
+#     # choose extremes (bounding box corners approximation)
+#     min_v = min(verts, key=lambda v: (v.x, v.y, v.z))
+#     max_v = max(verts, key=lambda v: (v.x, v.y, v.z))
+
+#     yield min_v
+#     yield max_v
+
+# def snap_plain_mesh_midpoint(obj):
+#     """
+#     Snap to mesh bounding-box center (non-frame)
+#     """
+#     if not is_plain_mesh(obj):
+#         return
+
+#     mesh = obj.data
+#     if not mesh.vertices:
+#         return
+
+#     verts = [obj.matrix_world @ v.co for v in mesh.vertices]
+
+#     center = sum(verts, mathutils.Vector()) / len(verts)
+#     yield center
 
 def snap_node_points(obj):
     """
     Snap to node origins
     """
-    node = BlNodeAdapter.get_by_object(obj)
+    try:
+        node = BlNodeWrap(obj)
+    except TypeError:
+        node = None
     if not node:
         return
 
@@ -67,7 +89,10 @@ def snap_frame_endpoints(obj):
     """
     Snap to frame start & end points
     """
-    frame = BlFrameAdapter.get_by_object(obj)
+    try:
+        frame = BlFrameWrap(obj)
+    except TypeError:
+        frame = None
     if not frame:
         return
 
@@ -82,7 +107,10 @@ def snap_frame_midpoint(obj):
     """
     Snap to frame midpoint
     """
-    frame = BlFrameAdapter.get_by_object(obj)
+    try:
+        frame = BlFrameWrap(obj)
+    except TypeError:
+        frame = None
     if not frame:
         return
 
@@ -102,9 +130,9 @@ SNAP_PROVIDERS = [
     snap_frame_midpoint,
 
     # ---- generic objects ----
-    snap_plain_empty_origin,
-    snap_plain_mesh_endpoints,
-    snap_plain_mesh_midpoint,
+    # snap_plain_empty_origin,
+    # snap_plain_mesh_endpoints,
+    # snap_plain_mesh_midpoint,
 ]
 
 class SnappingService:

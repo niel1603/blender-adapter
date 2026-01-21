@@ -24,7 +24,7 @@ class ExportJson(Operator, ExportHelper):
         session = bl_app().session(scene=context.scene)
 
         try:
-            session.state.model.save_json(self.filepath)
+            session.runtime.structural.save_json(self.filepath)
         except Exception as e:
             self.report({"ERROR"}, str(e))
             return {"CANCELLED"}
