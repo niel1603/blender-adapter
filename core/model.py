@@ -1,27 +1,19 @@
 import bpy
+
+from structural_om.core.model import StructuralModel
+
 from blender_adapter.core.api.node import BlNodeObj
 from blender_adapter.core.api.frame import BlFrameObj
 
 class BlenderModel:
     """
-    Blender-side model.
-    Owns all Blender object APIs and indices.
+    Blender-side infrastructure layer.
+    Mirrors domain state.
     """
 
-    def __init__(self, scene: bpy.types.Scene):
+    def __init__(self, *, scene: bpy.types.Scene, structural: StructuralModel):
         self.scene = scene
+        self.structural = structural
 
-        self.node = BlNodeObj()
+        self.node = BlNodeObj(structural.node)
         self.frame = BlFrameObj()
-
-    # ----------------------------
-    # REBUILD (Blender discovery)
-    # ----------------------------
-
-    def rebuild(self):
-        """
-        Rebuild Blender identity indices from scene.
-        Undo / redo / reload safe.
-        """
-        self.node.rebuild(self.scene)
-        self.frame.rebuild(self.scene)

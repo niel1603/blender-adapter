@@ -34,11 +34,14 @@ class DrawNode(bpy.types.Operator):
 
         if event.type == 'LEFTMOUSE' and event.value == 'PRESS':
 
-            # 1. Resolve intent (UI / interaction)
-            point = self._snapping.get_point(context, event)
+            # 1. Get live session (creates if needed)
+            session = bl_app().get_session(scene=context.scene)
+            if session is None:
+                self.report({'WARNING'}, "Session not started")
+                return {'CANCELLED'}
 
-            # 2. Get live session (creates if needed)
-            session = bl_app().session(scene=context.scene)
+            # 2. Resolve intent (UI / interaction)
+            point = self._snapping.get_point(context, event)
 
             # 3. Commit through manager (TRANSACTION)
             bl_node = session.ops.node.create(location=point)
@@ -47,3 +50,4 @@ class DrawNode(bpy.types.Operator):
             bl_node.select(context)
 
         return {'RUNNING_MODAL'}
+    

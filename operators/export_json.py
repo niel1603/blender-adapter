@@ -21,7 +21,7 @@ class ExportJson(Operator, ExportHelper):
 
     def execute(self, context):
         
-        session = bl_app().session(scene=context.scene)
+        session = bl_app().get_session(scene=context.scene)
 
         try:
             session.runtime.structural.save_json(self.filepath)

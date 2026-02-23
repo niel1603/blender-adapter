@@ -6,30 +6,53 @@ class DeleteObject(bpy.types.Operator):
     bl_label = "Delete Object"
     bl_options = {'REGISTER', 'UNDO'}
 
+    # -------------------------------------------------
+    # POLL
+    # -------------------------------------------------
+
     @classmethod
     def poll(cls, context):
-        session = bl_app().session(scene=context.scene)
+        app = bl_app()
+
+        if not context.selected_objects:
+            return False
+
+        session = app.get_session(context.scene)
+        if session is None:
+            return False
+
+        runtime = session.runtime
 
         for obj in context.selected_objects:
-            if session.runtime.blender.node.get_id(obj):
+            if runtime.blender.node.get_id(obj):
                 return True
-            if session.runtime.blender.frame.get_id(obj):
+            if runtime.blender.frame.get_id(obj):
                 return True
 
         return False
 
+    # -------------------------------------------------
+    # EXECUTE
+    # -------------------------------------------------
+
     def execute(self, context):
-        # 1. SNAPSHOT selection
+
+        # 1. Snapshot selection
         objs = list(context.selected_objects)
 
-        # 2. Get live session
-        session = bl_app().session(scene=context.scene)
+        # 2. Get session
+        session = bl_app().get_session(scene=context.scene)
+        if session is None:
+            self.report({'WARNING'}, "Session not started")
+            return {'CANCELLED'}
 
+        
         # 3. Resolve IDs
         node_ids: set[str] = set()
         frame_ids: set[str] = set()
 
         for obj in objs:
+
             frame_id = session.runtime.blender.frame.get_id(obj)
             if frame_id:
                 frame_ids.add(frame_id)
@@ -40,7 +63,6 @@ class DeleteObject(bpy.types.Operator):
                 node_ids.add(node_id)
 
         # 4. TRANSACTION
-        # Delete frames first (they may own nodes)
         for frame_id in frame_ids:
             session.ops.frame.delete(frame_id=frame_id)
 
@@ -48,4 +70,3 @@ class DeleteObject(bpy.types.Operator):
             session.ops.node.delete(node_id=node_id)
 
         return {'FINISHED'}
-

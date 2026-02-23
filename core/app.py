@@ -11,26 +11,41 @@ class BlLiveSession:
     def __init__(self, scene: bpy.types.Scene):
         self.scene = scene
 
-        # --- sync model (Blender <-> Structural) ---
+        # --- pure construction (NO rebuild here) ---
         self.runtime = BlRuntime(scene)
-
-        # --- operations API ---
         self.ops = BlModelTxn(runtime=self.runtime)
 
         self._alive = True
+        self._dirty = True
 
     # -------------------------------------------------
-    # lifecycle hooks
+    # state management
     # -------------------------------------------------
 
-    def rebuild_from_scene(self):
-        """Re-sync after undo / redo / file load."""
+    def mark_dirty(self):
         if not self._alive:
             return
-        self.runtime.rebuild()
+        self._dirty = True
+
+    def ensure_ready(self):
+        """
+        Perform lazy rebuild if needed.
+        Safe to call before any operation.
+        """
+        if not self._alive:
+            return
+
+        if self._dirty:
+            print("\n[SOM] >>> Rebuild triggered")
+            self.runtime.rebuild_from_scene()
+            self._dirty = False
+            print("[SOM] <<< Rebuild completed\n")
+
+    # -------------------------------------------------
+    # lifecycle
+    # -------------------------------------------------
 
     def dispose(self):
-        """Explicit teardown."""
         if not self._alive:
             return
 
@@ -55,14 +70,21 @@ class BlApplication:
     def start(self):
         if self._running:
             return
+
         self._running = True
 
-        # register handlers here if needed
-        # bpy.app.handlers.load_post.append(self._on_load)
+        if self._on_load_post not in bpy.app.handlers.load_post:
+            bpy.app.handlers.load_post.append(self._on_load_post)
+
+        if self._on_undo_post not in bpy.app.handlers.undo_post:
+            bpy.app.handlers.undo_post.append(self._on_undo_post)
 
     def stop(self):
         if not self._running:
             return
+
+        bpy.app.handlers.load_post.remove(self._on_load_post)
+        bpy.app.handlers.undo_post.remove(self._on_undo_post)
 
         for session in self._sessions.values():
             session.dispose()
@@ -70,27 +92,33 @@ class BlApplication:
         self._sessions.clear()
         self._running = False
 
-        # unregister handlers here
+    def _on_load_post(self, _):
+        for session in self._sessions.values():
+            session.mark_dirty()
+
+    def _on_undo_post(self, _):
+        for session in self._sessions.values():
+            session.mark_dirty()
 
     # -------------------------------------------------
     # scene session API (SapModel analogue)
     # -------------------------------------------------
 
-    def session(self, scene: bpy.types.Scene) -> BlLiveSession:
-        """
-        Get or create a live session for a scene.
-        """
+    def start_session(self, scene: bpy.types.Scene) -> BlLiveSession:
         key = scene.as_pointer()
+        if key in self._sessions:
+            return self._sessions[key]
 
-        session = self._sessions.get(key)
-        if session is None:
-            session = BlLiveSession(scene)
-            self._sessions[key] = session
-
+        session = BlLiveSession(scene)
+        self._sessions[key] = session
         return session
 
-    def has_session(self, scene: bpy.types.Scene) -> bool:
-        return scene.as_pointer() in self._sessions
+
+    def get_session(self, scene: bpy.types.Scene) -> BlLiveSession | None:
+        return self._sessions.get(scene.as_pointer())
+
+    # def has_session(self, scene: bpy.types.Scene) -> bool:
+    #     return scene.as_pointer() in self._sessions
 
     def drop_session(self, scene: bpy.types.Scene):
         key = scene.as_pointer()

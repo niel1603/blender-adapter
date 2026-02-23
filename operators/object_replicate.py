@@ -14,26 +14,48 @@ class ReplicateObject(bpy.types.Operator):
     count: bpy.props.IntProperty(name="Count", default=1, min=1)  # type: ignore
 
     _preview: "ClonePreview"
+    _selection: list[bpy.types.Object]
+
+    # -------------------------------------------------
+    # POLL
+    # -------------------------------------------------
 
     @classmethod
     def poll(cls, context):
-        session = bl_app().session(scene=context.scene)
+        app = bl_app()
+
+        if not context.selected_objects:
+            return False
+
+        session = app.get_session(context.scene)
+        if session is None:
+            return False
+
+        runtime = session.runtime
 
         for obj in context.selected_objects:
-            if session.runtime.blender.node.get_id(obj):
+            if runtime.blender.node.get_id(obj):
                 return True
-            if session.runtime.blender.frame.get_id(obj):
+            if runtime.blender.frame.get_id(obj):
                 return True
 
         return False
 
-    def invoke(self, context, event):
-        objs = list(context.selected_objects)
+    # -------------------------------------------------
+    # INVOKE — SNAPSHOT + PREVIEW
+    # -------------------------------------------------
 
-        self._preview = ClonePreview(context, objs)
+    def invoke(self, context, event):
+        self._selection = list(context.selected_objects)
+
+        self._preview = ClonePreview(context, self._selection)
         self._preview.begin()
 
         return context.window_manager.invoke_props_dialog(self)
+
+    # -------------------------------------------------
+    # CHECK — PREVIEW UPDATE
+    # -------------------------------------------------
 
     def check(self, context):
         delta = Vector((self.dx, self.dy, self.dz))
@@ -42,20 +64,25 @@ class ReplicateObject(bpy.types.Operator):
         self._preview.update(offsets)
         return True
 
+    # -------------------------------------------------
+    # EXECUTE — MUTATION SAFE
+    # -------------------------------------------------
+
     def execute(self, context):
+
         self._preview.finish()
 
-        session = bl_app().session(scene=context.scene)
+        session = bl_app().get_session(scene=context.scene)
+        if session is None:
+            self.report({'WARNING'}, "Session not started")
+            return {'CANCELLED'}
+
         delta = Vector((self.dx, self.dy, self.dz))
 
-        # 1. SNAPSHOT selection
-        objs = list(context.selected_objects)
-
-        # 2. Resolve IDs
         frame_ids: set[str] = set()
         node_ids: set[str] = set()
 
-        for obj in objs:
+        for obj in self._selection:
             frame_id = session.runtime.blender.frame.get_id(obj)
             if frame_id:
                 frame_ids.add(frame_id)
@@ -65,16 +92,15 @@ class ReplicateObject(bpy.types.Operator):
             if node_id:
                 node_ids.add(node_id)
 
-        # 3. TRANSACTION
-        # Replicate nodes
+        # --- TRANSACTION ---
+
         if node_ids:
             session.ops.node.replicate_by_vector(
                 src_node_ids=list(node_ids),
                 delta=delta,
                 count=self.count,
             )
-            
-        # Replicate frames
+
         if frame_ids:
             session.ops.frame.replicate_by_vector(
                 src_frame_ids=list(frame_ids),
@@ -83,6 +109,10 @@ class ReplicateObject(bpy.types.Operator):
             )
 
         return {'FINISHED'}
+
+    # -------------------------------------------------
+    # CANCEL
+    # -------------------------------------------------
 
     def cancel(self, context):
         self._preview.finish()

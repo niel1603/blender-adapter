@@ -6,6 +6,9 @@ class StartSession(bpy.types.Operator):
     bl_label = "Start Modeling Session"
 
     def execute(self, context):
-        bl_app().session(scene=context.scene)
+        app = bl_app()
+        session = app.start_session(context.scene)
+        session.ensure_ready()
+
         self.report({'INFO'}, "SoM session started")
         return {'FINISHED'}

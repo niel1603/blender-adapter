@@ -13,46 +13,77 @@ class MoveObject(bpy.types.Operator):
     dz: bpy.props.FloatProperty(name="ΔZ", default=0.0, options={'SKIP_SAVE'})  # type: ignore
 
     _preview: "TransformPreview"
+    _selection: list[bpy.types.Object]
+
+    # -------------------------------------------------
+    # POLL
+    # -------------------------------------------------
 
     @classmethod
     def poll(cls, context):
-        session = bl_app().session(scene=context.scene)
+        app = bl_app()
+
+        if not context.selected_objects:
+            return False
+
+        session = app.get_session(context.scene)
+        if session is None:
+            return False
+
+        runtime = session.runtime
 
         for obj in context.selected_objects:
-            if session.runtime.blender.node.get_id(obj):
+            if runtime.blender.node.get_id(obj):
                 return True
-            if session.runtime.blender.frame.get_id(obj):
+            if runtime.blender.frame.get_id(obj):
                 return True
 
         return False
 
-    def invoke(self, context, event):
-        objs = list(context.selected_objects)
+    # -------------------------------------------------
+    # INVOKE — SNAPSHOT + PREVIEW
+    # -------------------------------------------------
 
-        self._preview = TransformPreview(objs)
+    def invoke(self, context, event):
+
+        self._selection = list(context.selected_objects)
+
+        self._preview = TransformPreview(self._selection)
         self._preview.begin()
 
         return context.window_manager.invoke_props_dialog(self)
 
+    # -------------------------------------------------
+    # CHECK — PREVIEW UPDATE ONLY
+    # -------------------------------------------------
+
     def check(self, context):
+
         delta = Vector((self.dx, self.dy, self.dz))
         self._preview.update(delta)
+
         return True
 
+    # -------------------------------------------------
+    # EXECUTE — MUTATION SAFE
+    # -------------------------------------------------
+
     def execute(self, context):
+
         self._preview.finish()
 
-        session = bl_app().session(scene=context.scene)
+        session = bl_app().get_session(scene=context.scene)
+        if session is None:
+            self.report({'WARNING'}, "Session not started")
+            return {'CANCELLED'}
+
         direction = (self.dx, self.dy, self.dz)
 
-        # 1. SNAPSHOT selection
-        objs = list(context.selected_objects)
-
-        # 2. Resolve IDs
         frame_ids: set[str] = set()
         node_ids: set[str] = set()
 
-        for obj in objs:
+        for obj in self._selection:
+
             frame_id = session.runtime.blender.frame.get_id(obj)
             if frame_id:
                 frame_ids.add(frame_id)
@@ -62,7 +93,8 @@ class MoveObject(bpy.types.Operator):
             if node_id:
                 node_ids.add(node_id)
 
-        # 3. TRANSACTION
+        # --- TRANSACTION ---
+
         for node_id in node_ids:
             session.ops.node.move(
                 node_id=node_id,
@@ -76,6 +108,10 @@ class MoveObject(bpy.types.Operator):
             )
 
         return {'FINISHED'}
+
+    # -------------------------------------------------
+    # CANCEL
+    # -------------------------------------------------
 
     def cancel(self, context):
         self._preview.finish()

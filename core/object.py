@@ -1,4 +1,5 @@
 import bpy
+from mathutils import Vector
 
 class BlNodeProps(bpy.types.PropertyGroup):
     '''
@@ -38,18 +39,16 @@ class BlNodeWrap:
 
 class BlFrameWrap:
     def __init__(self, obj: bpy.types.Object):
-        if (not hasattr(obj, "frame_rna")):
+        if not hasattr(obj, "frame_rna"):
             raise TypeError("Object is not a Frame")
         self.obj = obj
 
     # --- identity ---
-
     @property
     def id(self) -> str:
         return self.obj.frame_rna.frame_id
 
     # --- topology ---
-
     @property
     def start_node_id(self) -> str:
         return self.obj.frame_rna.start_node
@@ -59,10 +58,36 @@ class BlFrameWrap:
         return self.obj.frame_rna.end_node
 
     # --- geometry ---
-
     @property
     def mesh(self) -> bpy.types.Mesh:
         return self.obj.data
+
+    def _get_world_vertex(self, vert_index: int) -> Vector:
+        """Return vertex location in world space"""
+        v = self.mesh.vertices[vert_index].co
+        return self.obj.matrix_world @ v
+
+    def _set_world_vertex(self, vert_index: int, world_location: Vector):
+        """Set vertex location using world space input"""
+        self.mesh.vertices[vert_index].co = (
+            self.obj.matrix_world.inverted() @ world_location
+        )
+
+    @property
+    def start_node_location(self) -> Vector:
+        return self._get_world_vertex(0)
+
+    @start_node_location.setter
+    def start_node_location(self, value: Vector):
+        self._set_world_vertex(0, value)
+
+    @property
+    def end_node_location(self) -> Vector:
+        return self._get_world_vertex(1)
+
+    @end_node_location.setter
+    def end_node_location(self, value: Vector):
+        self._set_world_vertex(1, value)
 
     # --- transform ---
     @property
@@ -74,7 +99,6 @@ class BlFrameWrap:
         self.obj.location = value
 
     # --- selection ---
-
     def select(self, context):
         if context.mode != 'OBJECT':
             bpy.ops.object.mode_set(mode='OBJECT')

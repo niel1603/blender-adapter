@@ -13,142 +13,173 @@ class BlNodeTxn:
     # -------------------------------------------------
     def clear(self):
         """
-        Clear the entire system.
-
-        Domain truth is reset.
-        Blender representation is cleaned up.
+        Clear entire system.
+        Domain resets.
+        Blender mirrors.
         """
 
-        # 1. BLENDER (cleanup)
-        # Remove visual side effects first.
+        # 1. DOMAIN
+        self.st.node.clear()
+
+        # 2. BLENDER
         self.bl.node.clear()
 
-        # 2. DOMAIN (authoritative reset)
-        self.st.node.clear()
 
     # -------------------------------------------------
     # CREATE
     # -------------------------------------------------
 
     def create(self, *, location) -> BlNodeWrap:
-        """
-        Create or reuse a node at the given location.
 
-        Domain decides identity.
-        Blender reflects domain state.
-        """
-
-        # 1. DOMAIN (authoritative)
+        # 1. CREATE DOMAIN
         node = self.st.node.create(xyz=tuple(location))
-        node_id = node.id
 
-        # 2. BLENDER (idempotent)
-        bl_node = self.bl.node.get(node_id)
-        if bl_node is None:
-            bl_node = self.bl.node.create(
-                node_id=node_id,
-                name=f"N{node_id}",
-                location=node.xyz,
-            )
+        # If already mirrored, reuse
+        existing = self.bl.node.get(node.id)
+        if existing:
+            return existing
 
-        return bl_node
+        try:
+            # 2. CREATE BLENDER
+            return self.bl.node._create_object(node)
+
+        except Exception:
+            # 3. ROLLBACK DOMAIN
+            self.st.node.delete(node.id)
+            raise
 
     # -------------------------------------------------
     # MOVE
     # -------------------------------------------------
 
     def move(self, *, node_id, direction):
-        """
-        Interactive nudge / keyboard move.
-        """
 
-        # ---------- 1. DOMAIN ----------
-        self.st.node.move(
-            node_id=node_id, 
-            direction=direction)
+        node = self.st.node[node_id]
 
-        # ---------- 2. BLENDER ----------
-        bl_node = self.bl.node.get(node_id)
-        if bl_node:
-            self.bl.node.move(bl_node, direction)
+        new_xyz = (
+            node.xyz[0] + direction[0],
+            node.xyz[1] + direction[1],
+            node.xyz[2] + direction[2],
+        )
+
+        # 1. DOMAIN VALIDATES + MUTATES
+        self.st.node.set_location(
+            node_id=node_id,
+            location=new_xyz,
+        )
+
+        try:
+            # 2. BLENDER MIRROR
+            self.bl.node.set_location(node_id, new_xyz)
+
+        except Exception:
+            # 3. ROLLBACK DOMAIN
+            self.st.node.set_location(
+                node_id=node_id,
+                location=node.xyz  # restore previous
+            )
+            raise
 
     # -------------------------------------------------
     # SET LOCATION (drag commit)
     # -------------------------------------------------
 
     def set_location(self, *, node_id, location):
-        """
-        Drag commit: absolute placement.
-        """
 
-        # ---------- 1. DOMAIN ----------
-        self.st.node.set_location(node_id=node_id, location=location)
+        old_xyz = self.st.node[node_id].xyz
 
-        # ---------- 2. BLENDER ----------
-        bl_node = self.bl.node.get(node_id)
-        if bl_node:
-            self.bl.node.set_location(bl_node, location)
+        # 1. DOMAIN VALIDATES + MUTATES
+        self.st.node.set_location(
+            node_id=node_id,
+            location=location,
+        )
+
+        try:
+            # 2. BLENDER MIRROR
+            self.bl.node.set_location(node_id, location)
+
+        except Exception:
+            # 3. ROLLBACK DOMAIN
+            self.st.node.set_location(
+                node_id=node_id,
+                location=old_xyz,
+            )
+            raise
+
 
     # -------------------------------------------------
     # DELETE
     # -------------------------------------------------
 
     def delete(self, *, node_id):
-        
-        # 1. DOMAIN
-        self.st.node.delete(node_id=node_id)
 
-        # 2. BLENDER
-        bl_node = self.bl.node.get(node_id)
-        self.bl.node.delete(bl_node)
+        # 1. DELETE DOMAIN
+        # create snapshot for rollback to
+        node_snapshot = self.st.node[node_id]
+
+        self.st.node.delete(node_id)
+
+        try:
+            # 2. BLENDER MIRROR
+            self.bl.node.delete(node_id)
+
+        except Exception:
+            # 3. ROLLBACK DOMAIN
+            self.st.node.create(
+                xyz=node_snapshot.xyz,
+                node_id=node_snapshot.id,
+            )
+            raise
 
     # -------------------------------------------------
     # REPLICATE
     # -------------------------------------------------
-            
+                
     def replicate_by_vector(
         self,
         *,
         src_node_ids: list[str],
-        delta: Vector,
+        delta,
         count: int,
     ) -> list[BlNodeWrap]:
 
         delta_tuple = (delta.x, delta.y, delta.z)
 
-        # ---------- 1. DOMAIN ----------
-        batches = self.st.node.replicate(
-            src_node_ids=src_node_ids,
-            delta=delta_tuple,
-            count=count,
-        )
+        created_nodes = []
+        created_bl = []
 
-        # ---------- 2. BLENDER ----------
-        created: list[BlNodeWrap] = []
+        try:
+            # 1. REPLICATE DOMAIN FIRST
+            for i in range(count):
+                for src_id in src_node_ids:
 
-        src_bl_nodes = {
-            nid: self.bl.node.get(nid)
-            for nid in src_node_ids
-        }
+                    src_node = self.st.node[src_id]
 
-        for nid, bl_node in src_bl_nodes.items():
-            if bl_node is None:
-                raise RuntimeError(f"Missing Blender node for {nid}")
+                    new_xyz = (
+                        src_node.xyz[0] + delta_tuple[0] * (i + 1),
+                        src_node.xyz[1] + delta_tuple[1] * (i + 1),
+                        src_node.xyz[2] + delta_tuple[2] * (i + 1),
+                    )
 
-        for batch in batches:
-            for src_id, node in zip(src_node_ids, batch):
-                src_bl = src_bl_nodes[src_id]
+                    node = self.st.node.create(xyz=new_xyz)
+                    created_nodes.append(node)
+
+            # 2. BLENDER MIRROR
+            for node in created_nodes:
 
                 bl_node = self.bl.node.get(node.id)
                 if bl_node is None:
-                    bl_node = self.bl.node.replicate_from(
-                        src=src_bl,
-                        node_id=node.id,
-                        name=f"N{node.id}",
-                        location=node.xyz,
-                    )
+                    bl_node = self.bl.node._create_object(node)
 
-                created.append(bl_node)
+                created_bl.append(bl_node)
 
-        return created
+            return created_bl
 
+        except Exception:
+
+            # 3. DOMAIN ROLLBACK
+            for node in reversed(created_nodes):
+                if node.id in self.st.node:
+                    self.st.node.delete(node.id)
+
+            raise

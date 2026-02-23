@@ -5,68 +5,40 @@ from blender_adapter.core.model import BlenderModel
 
 class BlRuntime:
     """
-    Runtime bridge between BlenderModel and StructuralModel.
+    Runtime bridge between StructuralModel (authoritative)
+    and BlenderModel (mirror).
     """
 
     def __init__(self, scene: bpy.types.Scene):
         self.scene = scene
+
+        # 1. DOMAIN FIRST
         self.structural = StructuralModel()
-        self.blender = BlenderModel(scene)
-        self.rebuild()
+
+        # 2, BLENDER REFERENCES DOMAIN
+        self.blender = BlenderModel(
+            scene=scene,
+            structural=self.structural,
+        )
 
     # ----------------------------
     # REBUILD
     # ----------------------------
 
-    def rebuild(self):
-        """
-        Transactional rebuild.
+    def rebuild_from_scene(self):
 
-        Blender state → identity indices → domain model
-        Undo / redo / load safe.
-        """
+        # 1. Extract raw data
+        print("[SOM] Rebuild Phase 1: Extracting Blender state")
+        nodes = self.blender.node.extract_from_scene(self.scene)
 
-        # ------------------------------------
-        # PHASE 1: Discover Blender state
-        # ------------------------------------
+        # 2. Rebuild domain
+        print("[SOM] Rebuild Phase 2: Rebuilding domain")
+        self.structural.node.rebuild(nodes)
 
-        self.blender.rebuild()
+        # 3. Rebuild blender identity index
+        print("[SOM] Rebuild Phase 3: Rebuilding blender identity")
+        self.blender.node.rebuild_identity_from_scene(self.scene)
 
-        # ------------------------------------
-        # PHASE 2: Reset domain model
-        # ------------------------------------
-
-        self.structural.clear()
-
-        # ------------------------------------
-        # PHASE 3: Materialize nodes
-        # ------------------------------------
-
-        for bl_node in self.blender.node:
-            self.structural.node.create(
-                xyz=tuple(bl_node.location),
-                node_id=bl_node.id,
-            )
-
-        # ------------------------------------
-        # PHASE 4: Materialize frames
-        # ------------------------------------
-
-        for bl_frame in self.blender.frame:
-            self.structural.frame.create(
-                nodes=self.structural.node,
-                frame_id=bl_frame.id,
-                n1_id=bl_frame.start_node_id,
-                n2_id=bl_frame.end_node_id,
-            )
-
-        # ------------------------------------
-        # PHASE 5: Seal rebuild (ID pools)
-        # ------------------------------------
-
-        self.structural.node.ids.rebuild_from_existing(
-            self.structural.node.nodes.keys()
-        )
-        self.structural.frame.ids.rebuild_from_existing(
-            self.structural.frame.frames.keys()
-        )
+        # 4. Sync differences
+        print("[SOM] Rebuild Phase 4: Syncing Blender mirror")
+        self.blender.node.sync_from_domain()

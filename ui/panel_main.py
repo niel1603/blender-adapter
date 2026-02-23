@@ -46,7 +46,10 @@ class SOM_PT_main_panel(bpy.types.Panel):
         # Session
         # -------------------------------------------------
         app = bl_app()
-        if not app.has_session(scene):
+        session = app.get_session(scene)
+        session_exists = session is not None
+
+        if not session_exists:
             layout.operator("som.start_live_session", icon='PLAY')
             layout.separator()
         else:

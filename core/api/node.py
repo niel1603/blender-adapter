@@ -1,28 +1,53 @@
 from collections.abc import Iterator
 import bpy
-from mathutils import Vector
+
+from structural_om.core.object import Node
+from structural_om.core.api.node import NodeObj
 from blender_adapter.core.object import BlNodeWrap
 
 class BlNodeObj:
-    """
-    Blender node APIs
-    """
 
-    def __init__(self):
-        self._nodes: dict[str, str] = {}  # node_id -> object name
+    def __init__(self, domain: NodeObj):
+        self.domain = domain
+        self._nodes: dict[str, str] = {}  # node_id → object name
 
-    # ---------- rebuild ----------
+    # ---------- rebuild from scene api ----------
 
-    def rebuild(self, scene: bpy.types.Scene):
+    def extract_from_scene(self, scene):
+
+        extracted = []
+
+        for obj in scene.objects:
+            if hasattr(obj, "node_rna") and obj.node_rna.node_id:
+                extracted.append(
+                    (obj.node_rna.node_id, tuple(obj.location))
+                )
+
+        return extracted
+    
+    def rebuild_identity_from_scene(self, scene):
+
         self._nodes.clear()
 
         for obj in scene.objects:
-            if not hasattr(obj, "node_rna"):
-                continue
-
-            node_id = obj.node_rna.node_id
-            if node_id:
+            if hasattr(obj, "node_rna") and obj.node_rna.node_id:
+                node_id = obj.node_rna.node_id
                 self._nodes[node_id] = obj.name
+    
+    def sync_from_domain(self):
+
+        # Remove stale objects
+        for node_id in list(self._nodes):
+            if node_id not in self.domain:
+                name = self._nodes.pop(node_id)
+                obj = bpy.data.objects.get(name)
+                if obj:
+                    bpy.data.objects.remove(obj, do_unlink=True)
+
+        # Create missing objects
+        for node in self.domain:
+            if node.id not in self._nodes:
+                self._create_object(node)
 
     # ---------- clear ----------
 
@@ -33,7 +58,7 @@ class BlNodeObj:
         """
         for name in list(self._nodes.values()):
             obj = bpy.data.objects.get(name)
-            if obj:
+            if obj: 
                 bpy.data.objects.remove(obj, do_unlink=True)
 
         self._nodes.clear()
@@ -106,93 +131,77 @@ class BlNodeObj:
 
     # ---------- creation ----------
 
-    def create(
-        self,
-        *,
-        node_id: str,
-        name: str,
-        location,
-        size: float = 0.1,
-        collection=None,
-    ) -> BlNodeWrap:
-        """
-        Create a Blender-backed node.
-        """
+    def _create_object(self, node: Node):
 
-        # uniqueness enforcement
-        if node_id in self._nodes:
-            raise RuntimeError(f"Duplicate node_id '{node_id}'")
+        name = f"N{node.id}"
 
-        # collection resolution
-        if collection is None:
-            collection = bpy.context.scene.collection
-
-        # Blender object creation
         obj = bpy.data.objects.new(name, None)
         obj.empty_display_type = 'PLAIN_AXES'
-        obj.empty_display_size = size
-        obj.location = location
+        obj.empty_display_size = 0.1
+        obj.location = node.xyz
 
-        collection.objects.link(obj)
+        bpy.context.scene.collection.objects.link(obj)
 
-        # RNA binding
-        rna = obj.node_rna
-        rna.node_id = node_id
-        rna.label = name
+        obj.node_rna.node_id = node.id
+        obj.node_rna.label = name
 
-        # bookkeeping
-        self._nodes[node_id] = obj.name
+        self._nodes[node.id] = obj.name
 
         return BlNodeWrap(obj)
-    
+
+    def create(self, *, location):
+
+        node = self.domain.create(xyz=location)
+
+        if node.id in self._nodes:
+            return self.get(node.id)
+
+        try:
+            return self._create_object(node)
+        except Exception:
+            self.domain.delete(node.id)
+            raise
+
     # ---------- mutation ----------
 
-    def move(self, node: BlNodeWrap, direction):
-        node.obj.location += Vector(direction)
+    def set_location(self, node_id: str, location):
 
-    def set_location(self, node: BlNodeWrap, location):
-        node.obj.location = location
-    
+        self.domain.set_location(node_id=node_id, location=location)
+
+        obj = bpy.data.objects[self._nodes[node_id]]
+        obj.location = location
+
     # ---------- deletion ----------
 
-    def delete(self, node: BlNodeWrap):
-        node_id = node.id
-        bpy.data.objects.remove(node.obj, do_unlink=True)
-        self._nodes.pop(node_id, None)
+    def delete(self, node_id: str):
+
+        self.domain.delete(node_id)
+
+        name = self._nodes.pop(node_id)
+        obj = bpy.data.objects.get(name)
+        if obj:
+            bpy.data.objects.remove(obj, do_unlink=True)
 
     # ---------- replicate ----------
 
-    def replicate_from(
-        self,
-        *,
-        src: BlNodeWrap,
-        node_id: str,
-        name: str,
-        location,
-        collection=None,
-    ) -> BlNodeWrap:
-        """
-        Strict replicate from an existing Blender node.
-        """
+    def replicate(self, node_id: str, offset, count: int):
 
-        if node_id in self._nodes:
-            raise RuntimeError(f"Duplicate node_id '{node_id}'")
+        original = self.domain[node_id]
+        results = []
 
-        src_obj = src.obj
+        for i in range(count):
 
-        if collection is None:
-            collection = src_obj.users_collection[0]
+            new_xyz = (
+                original.xyz[0] + offset[0] * (i + 1),
+                original.xyz[1] + offset[1] * (i + 1),
+                original.xyz[2] + offset[2] * (i + 1),
+            )
 
-        obj = bpy.data.objects.new(name, None)
-        obj.empty_display_type = src_obj.empty_display_type
-        obj.empty_display_size = src_obj.empty_display_size
-        obj.location = location
+            node = self.domain.create(xyz=new_xyz)
 
-        collection.objects.link(obj)
+            if node.id in self._nodes:
+                results.append(self.get(node.id))
+            else:
+                results.append(self._create_object(node))
 
-        rna = obj.node_rna
-        rna.node_id = node_id
-        rna.label = name
-
-        self._nodes[node_id] = obj.name
-        return BlNodeWrap(obj)
+        return results
